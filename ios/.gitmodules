@@ -1,0 +1,7 @@
+#
+# © 2024-present https://github.com/cengiz-pz
+#
+
+[submodule "godot"]
+	path = godot
+	url = https://github.com/godotengine/godot.git
