@@ -41,11 +41,7 @@ DerivedData/
 *.svg.import
 
 # project specific
-bin/*
+build/
 godot/
 Pods/
 Podfile.lock
-
-# Plugin-specific
-demo/addons/
-demo/ios/

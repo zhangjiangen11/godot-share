@@ -92,8 +92,6 @@ lint/tmp/
 # Godot
 .godot/
 *.import
-demo/addons
-demo/android
 
 # Mac OS
 .DS_Store
