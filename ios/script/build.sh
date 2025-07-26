@@ -7,22 +7,30 @@ set -e
 trap "sleep 1; echo" EXIT
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+GODOT_DIR=$(realpath $SCRIPT_DIR/..)/godot
 ANDROID_DIR=$(realpath $SCRIPT_DIR/../../android)
+BUILD_DIR=$(realpath $SCRIPT_DIR/..)/build
+CONFIG_DIR=$(realpath $SCRIPT_DIR/../config)
 
 PLUGIN_NODE_TYPE="Share"
 PLUGIN_NAME="${PLUGIN_NODE_TYPE}Plugin"
 PLUGIN_VERSION=''
 PLUGIN_PACKAGE_NAME=$($SCRIPT_DIR/get_gradle_property.sh pluginPackageName $ANDROID_DIR/config.gradle.kts)
 ANDROID_DEPENDENCIES=$($SCRIPT_DIR/get_android_dependencies.sh)
-readarray -t IOS_FRAMEWORKS <<< "$($SCRIPT_DIR/get_config_property.sh -qas frameworks)"
-readarray -t IOS_LINKER_FLAGS <<< "$($SCRIPT_DIR/get_config_property.sh -qas flags)"
+IOS_FRAMEWORKS=()
+while IFS= read -r line; do
+	IOS_FRAMEWORKS+=("$line")
+done < <($SCRIPT_DIR/get_config_property.sh -qas frameworks)
+IOS_LINKER_FLAGS=()
+while IFS= read -r line; do
+	IOS_LINKER_FLAGS+=("$line")
+done < <($SCRIPT_DIR/get_config_property.sh -qas flags)
 SUPPORTED_GODOT_VERSIONS=("4.2" "4.3" "4.4" "4.5")
 BUILD_TIMEOUT=40	# increase this value using -t option if device is not able to generate all headers before godot build is killed
 
-DEST_DIRECTORY="./bin/release"
-FRAMEWORKDIR="./bin/framework"
-LIB_DIRECTORY="./bin/lib"
-CONFIG_DIRECTORY="./config"
+DEST_DIR=$BUILD_DIR/release
+FRAMEWORKDIR=$BUILD_DIR/framework
+LIB_DIR=$BUILD_DIR/lib
 
 do_clean=false
 do_remove_pod_trunk=false
@@ -120,20 +128,26 @@ function display_error()
 
 function remove_godot_directory()
 {
-	if [[ -d "godot" ]]
+	if [[ -d "$GODOT_DIR" ]]
 	then
-		display_status "removing 'godot' directory..."
-		rm -rf "godot"
+		display_status "removing '$GODOT_DIR' directory..."
+		rm -rf $GODOT_DIR
 	else
-		display_warning "'godot' directory not found..."
+		display_warning "'$GODOT_DIR' directory not found!"
 	fi
 }
 
 
 function clean_plugin_build()
 {
-	display_status "cleaning existing build directories and generated files..."
-	rm -rf ./bin/*
+	if [[ -d "$BUILD_DIR" ]]
+	then
+		display_status "removing '$BUILD_DIR' directory..."
+		rm -rf $BUILD_DIR
+	else
+		display_warning "'$BUILD_DIR' directory not found!"
+	fi
+	display_status "cleaning generated files..."
 	find . -name "*.d" -type f -delete
 	find . -name "*.o" -type f -delete
 }
@@ -158,25 +172,21 @@ function download_godot()
 		exit 1
 	fi
 
-	if [[ -d "godot" ]]
+	if [[ -d "$GODOT_DIR" ]]
 	then
-		display_error "Error: godot directory already exists. Won't download."
+		display_error "Error: $GODOT_DIR directory already exists. Won't download."
 		exit 1
 	fi
 
 	SELECTED_GODOT_VERSION=$1
 	display_status "downloading godot version $SELECTED_GODOT_VERSION..."
 
-	godot_directory="godot-${SELECTED_GODOT_VERSION}-stable"
-	godot_archive_file_name="${godot_directory}.tar.xz"
+	$SCRIPT_DIR/fetch_git_repo.sh -t ${SELECTED_GODOT_VERSION}-stable https://github.com/godotengine/godot.git $GODOT_DIR
 
-	curl -LO "https://github.com/godotengine/godot/releases/download/${SELECTED_GODOT_VERSION}-stable/${godot_archive_file_name}"
-	tar -xf "$godot_archive_file_name"
-
-	mv "$godot_directory" godot
-	rm $godot_archive_file_name
-
-	echo "$SELECTED_GODOT_VERSION" > godot/GODOT_VERSION
+	if [[ -d "$GODOT_DIR" ]]
+	then
+		echo "$SELECTED_GODOT_VERSION" > $GODOT_DIR/GODOT_VERSION
+	fi
 }
 
 
@@ -198,13 +208,13 @@ function generate_godot_headers()
 
 function generate_static_library()
 {
-	if [[ ! -f "./godot/GODOT_VERSION" ]]
+	if [[ ! -f "$GODOT_DIR/GODOT_VERSION" ]]
 	then
 		display_error "Error: godot wasn't downloaded properly. Can't generate static library."
 		exit 1
 	fi
 
-	GODOT_VERSION=$(cat ./godot/GODOT_VERSION)
+	GODOT_VERSION=$(cat $GODOT_DIR/GODOT_VERSION)
 
 	TARGET_TYPE="$1"
 	lib_directory="$2"
@@ -232,45 +242,63 @@ function install_pods()
 
 function build_plugin()
 {
-	if [[ ! -f "./godot/GODOT_VERSION" ]]
+	if [[ ! -f "$GODOT_DIR/GODOT_VERSION" ]]
 	then
 		display_error "Error: godot wasn't downloaded properly. Can't build plugin."
 		exit 1
 	fi
 
-	GODOT_VERSION=$(cat ./godot/GODOT_VERSION)
+	GODOT_VERSION=$(cat $GODOT_DIR/GODOT_VERSION)
 
 	# Clear target directories
-	rm -rf "$DEST_DIRECTORY"
-	rm -rf "$LIB_DIRECTORY"
+	rm -rf "$DEST_DIR"
+	rm -rf "$LIB_DIR"
 
 	# Create target directories
-	mkdir -p "$DEST_DIRECTORY"
-	mkdir -p "$LIB_DIRECTORY"
+	mkdir -p "$DEST_DIR"
+	mkdir -p "$LIB_DIR"
 
 	display_status "building plugin library with godot version $GODOT_VERSION ..."
 
 	# Compile library
-	generate_static_library release $LIB_DIRECTORY
-	generate_static_library release_debug $LIB_DIRECTORY
-	mv $LIB_DIRECTORY/$PLUGIN_NAME.release_debug.a $LIB_DIRECTORY/$PLUGIN_NAME.debug.a
+	generate_static_library release $LIB_DIR
+	generate_static_library release_debug $LIB_DIR
+	mv $LIB_DIR/$PLUGIN_NAME.release_debug.a $LIB_DIR/$PLUGIN_NAME.debug.a
 
 	# Move library
-	cp $LIB_DIRECTORY/$PLUGIN_NAME.{release,debug}.a "$DEST_DIRECTORY"
+	cp $LIB_DIR/$PLUGIN_NAME.{release,debug}.a "$DEST_DIR"
 
-	cp "$CONFIG_DIRECTORY"/*.gdip "$DEST_DIRECTORY"
+	cp "$CONFIG_DIR"/*.gdip "$DEST_DIR"
+}
+
+
+function merge_string_array() {
+  local arr=("$@")  # Accept array as input
+  local result=""
+  local first=true
+
+  for str in "${arr[@]}"; do
+    if [ "$first" = true ]; then
+      result="$str"
+      first=false
+    else
+      result="$result, $str"
+    fi
+  done
+
+  echo "$result"
 }
 
 
 function create_zip_archive()
 {
-	if [[ ! -f "./godot/GODOT_VERSION" ]]
+	if [[ ! -f "$GODOT_DIR/GODOT_VERSION" ]]
 	then
 		display_error "Error: godot wasn't downloaded properly. Can't create zip archive."
 		exit 1
 	fi
 
-	GODOT_VERSION=$(cat ./godot/GODOT_VERSION)
+	GODOT_VERSION=$(cat $GODOT_DIR/GODOT_VERSION)
 
 	if [[ -z $PLUGIN_VERSION ]]
 	then
@@ -281,13 +309,13 @@ function create_zip_archive()
 
 	file_name="$PLUGIN_NAME-$godot_version_suffix.zip"
 
-	if [[ -e "./bin/release/$file_name" ]]
+	if [[ -e "$BUILD_DIR/release/$file_name" ]]
 	then
 		display_warning "deleting existing $file_name file..."
-		rm ./bin/release/$file_name
+		rm $BUILD_DIR/release/$file_name
 	fi
 
-	tmp_directory=$(realpath $SCRIPT_DIR/../bin/.tmp_zip)
+	tmp_directory=$BUILD_DIR/.tmp_zip
 	addon_directory=$(realpath $SCRIPT_DIR/../../addon)
 
 	if [[ -d "$tmp_directory" ]]
@@ -321,8 +349,8 @@ function create_zip_archive()
 				s/@pluginNodeName@/$PLUGIN_NODE_TYPE/g;
 				s/@pluginPackageName@/$PLUGIN_PACKAGE_NAME/g;
 				s/@pluginDependencies@/$ANDROID_DEPENDENCIES/g;
-				s/@iosFrameworks@/$IOS_FRAMEWORKS/g;
-				s/@iosLinkerFlags@/$IOS_LINKER_FLAGS/g
+				s/@iosFrameworks@/$(merge_string_array $IOS_FRAMEWORKS)/g;
+				s/@iosLinkerFlags@/$(merge_string_array $IOS_LINKER_FLAGS)/g
 			" "$file"
 		done
 	fi
@@ -331,10 +359,10 @@ function create_zip_archive()
 	find $(realpath $SCRIPT_DIR/../Pods) -iname '*.xcframework' -type d -exec cp -r {} $tmp_directory/ios/framework \;
 
 	mkdir -p $tmp_directory/ios/plugins
-	cp $CONFIG_DIRECTORY/*.gdip $tmp_directory/ios/plugins
-	cp $LIB_DIRECTORY/$PLUGIN_NAME.{release,debug}.a $tmp_directory/ios/plugins
+	cp $CONFIG_DIR/*.gdip $tmp_directory/ios/plugins
+	cp $LIB_DIR/$PLUGIN_NAME.{release,debug}.a $tmp_directory/ios/plugins
 
-	mkdir -p $DEST_DIRECTORY
+	mkdir -p $DEST_DIR
 
 	display_status "creating $file_name file..."
 	cd $tmp_directory; zip -yr ../release/$file_name ./*; cd -
@@ -412,7 +440,7 @@ while getopts "aA:bcgG:hHipPt:z:" option; do
 	esac
 done
 
-if ! [[ " ${SUPPORTED_GODOT_VERSIONS[*]} " =~ [[:space:]]${GODOT_VERSION}[[:space:]] ]]
+if ! [[ " ${SUPPORTED_GODOT_VERSIONS[*]} " =~ [[:space:]]${GODOT_VERSION}[[:space:]] ]] && [[ "$do_build" == true ]]
 then
 	if [[ "$do_download_godot" == false ]]
 	then

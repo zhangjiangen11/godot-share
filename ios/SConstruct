@@ -29,7 +29,7 @@ opts.Add(EnumVariable('arch', "Compilation Architecture", '', ['', 'arm64', 'x86
 opts.Add(BoolVariable('simulator', "Compilation platform", 'no'))
 opts.Add(BoolVariable('use_llvm', "Use the LLVM / Clang compiler", 'no'))
 opts.Add('target_name', 'Resulting file name.', '')
-opts.Add(PathVariable('target_path', 'The path where the lib is installed.', 'bin/lib/'))
+opts.Add(PathVariable('target_path', 'The path where the lib is installed.', 'build/lib/'))
 opts.Add(EnumVariable('version', 'Godot version to target', '', valid_godot_versions))
 
 # Updates the environment with the option variables.
@@ -67,23 +67,18 @@ architecture_directory = ''
 if env['simulator']:
 	architecture_directory = 'ios-arm64_x86_64-simulator'
 	sdk_name = 'iphonesimulator'
-	env.Append(CCFLAGS=['-mios-simulator-version-min=10.0'])
-	env.Append(LINKFLAGS=["-mios-simulator-version-min=10.0"])
+	env.Append(CCFLAGS=['-mios-simulator-version-min=14.3'])
+	env.Append(LINKFLAGS=["-mios-simulator-version-min=14.3"])
 else:
 	architecture_directory = 'ios-arm64'
 	sdk_name = 'iphoneos'
-	env.Append(CCFLAGS=['-miphoneos-version-min=10.0'])
-	env.Append(LINKFLAGS=["-miphoneos-version-min=10.0"])
+	env.Append(CCFLAGS=['-miphoneos-version-min=14.3'])
+	env.Append(LINKFLAGS=["-miphoneos-version-min=14.3"])
 
 try:
 	sdk_path = decode_utf8(subprocess.check_output(['xcrun', '--sdk', sdk_name, '--show-sdk-path']).strip())
 except (subprocess.CalledProcessError, OSError):
 	raise ValueError("Failed to find SDK path while running xcrun --sdk {} --show-sdk-path.".format(sdk_name))
-
-
-env.Append(FRAMEWORKPATH=[f'#Pods/Google-Mobile-Ads-SDK/Frameworks/GoogleMobileAdsFramework/GoogleMobileAds.xcframework/{architecture_directory}'])
-env.Append(FRAMEWORKPATH=[f'#Pods/GoogleUserMessagingPlatform/Frameworks/Release/UserMessagingPlatform.xcframework/{architecture_directory}'])
-
 
 env.Append(CCFLAGS=[
 	'-fobjc-arc', 

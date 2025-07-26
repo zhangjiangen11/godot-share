@@ -6,49 +6,60 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANDROID_DIR=$(realpath $SCRIPT_DIR/../../android)
 TOML_FILE="$ANDROID_DIR/gradle/libs.versions.toml"
-declare -A versions_map
-declare -a library_versions
 
-# Extract [versions]
-in_versions=false
+# Arrays to store versions
+version_keys=()
+version_values=()
+library_versions=()
+
+# --- Parse [versions] section ---
+in_versions=0
 while IFS= read -r line; do
-	if [[ $line =~ ^\[versions\] ]]; then
-		in_versions=true
+	line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+	if [[ $line == "[versions]" ]]; then
+		in_versions=1
 		continue
-	elif [[ $line =~ ^\[.*\] ]]; then
-		in_versions=false
+	elif [[ $line == \[*] ]]; then
+		in_versions=0
 	fi
 
-	if $in_versions && [[ $line =~ ^([a-zA-Z0-9_-]+)\ *=\ *\"([^\"]+)\" ]]; then
-		key="${BASH_REMATCH[1]}"
-		value="${BASH_REMATCH[2]}"
-		versions_map["$key"]="$value"
+	if [[ $in_versions -eq 1 && $line =~ ^([a-zA-Z0-9_-]+)[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+		version_keys+=("${BASH_REMATCH[1]}")
+		version_values+=("${BASH_REMATCH[2]}")
 	fi
 done < "$TOML_FILE"
 
-# Extract [libraries] and resolve version.ref
-in_libraries=false
+# Function to get version by key (since Bash 3.x has no associative arrays)
+get_version() {
+	local key="$1"
+	for i in "${!version_keys[@]}"; do
+		if [[ "${version_keys[$i]}" == "$key" ]]; then
+			echo "${version_values[$i]}"
+			return
+		fi
+	done
+}
+
+# --- Parse [libraries] section ---
+in_libraries=0
 while IFS= read -r line; do
-	if [[ $line =~ ^\[libraries\] ]]; then
-		in_libraries=true
+	line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+	if [[ $line == "[libraries]" ]]; then
+		in_libraries=1
 		continue
-	elif [[ $line =~ ^\[.*\] ]]; then
-		in_libraries=false
+	elif [[ $line == \[*] ]]; then
+		in_libraries=0
 	fi
 
-	if $in_libraries && [[ $line =~ ^([a-zA-Z0-9_-]+)\ *=.*version\.ref\ *=\ *\"([^\"]+)\" ]]; then
+	if [[ $in_libraries -eq 1 && $line =~ ^([a-zA-Z0-9_-]+)[[:space:]]*=.*version\.ref[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
 		lib="${BASH_REMATCH[1]}"
 		version_key="${BASH_REMATCH[2]}"
-		resolved_version="${versions_map[$version_key]}"
-		if [[ -n $resolved_version ]]; then
-			library_versions+=("$lib:$resolved_version")
+		version="$(get_version "$version_key")"
+		if [[ -n $version ]]; then
+			library_versions+=("\"$lib:$version\"")
 		fi
 	fi
 done < "$TOML_FILE"
 
-quoted_entries=()
-for entry in "${library_versions[@]}"; do
-	quoted_entries+=("\"$entry\"")
-done
-
-IFS=','; echo "${quoted_entries[*]}"
+# --- Output comma-separated, double-quoted values ---
+IFS=','; echo "${library_versions[*]}"

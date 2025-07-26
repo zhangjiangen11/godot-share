@@ -16,15 +16,15 @@ if [ ! -f "$FILE" ]; then
 	exit 1
 fi
 
-# Extract block between `extra.apply {` and the matching closing `}`
-in_block=false
+# Extract the extra.apply block contents
+in_block=0
 block=""
 while IFS= read -r line; do
 	if echo "$line" | grep -q 'extra[[:space:]]*\.[[:space:]]*apply[[:space:]]*{' ; then
-		in_block=true
+		in_block=1
 		continue
 	fi
-	if $in_block; then
+	if [ $in_block -eq 1 ]; then
 		if echo "$line" | grep -q '^}' ; then
 			break
 		fi
@@ -37,34 +37,51 @@ if [ -z "$block" ]; then
 	exit 1
 fi
 
-# Parse all set("key", "...") lines, even with embedded get()
-declare -A PROPS
+# Store keys and values in parallel arrays (Bash 3.x compatible)
+KEYS=()
+VALS=()
 
-# Capture key and raw value
 while IFS= read -r line; do
 	key=$(echo "$line" | sed -n 's/.*set("\([^"]*\)".*/\1/p')
 	val=$(echo "$line" | sed -n 's/.*set("[^"]*",[[:space:]]*"\(.*\)").*/\1/p')
 	if [ -n "$key" ] && [ -n "$val" ]; then
-		PROPS["$key"]="$val"
+		KEYS+=("$key")
+		VALS+=("$val")
 	fi
 done <<< "$block"
 
-# Recursive resolution for ${get("...")}
-resolve() {
-	local value="${PROPS[$1]}"
-	local loops=0
-	while echo "$value" | grep -q '\${get("'; do
-		value=$(echo "$value" | sed -E 's/\$\{get\("([^"]+)"\)\}/\${PROPS[\1]}/g')
-		value=$(eval "echo \"$value\"")
-		loops=$((loops + 1))
-		[ "$loops" -gt 10 ] && break
+# Lookup function
+get_raw_value() {
+	local key="$1"
+	local i
+	for (( i=0; i<${#KEYS[@]}; i++ )); do
+		if [ "${KEYS[$i]}" = "$key" ]; then
+			echo "${VALS[$i]}"
+			return
+		fi
 	done
-	echo "$value"
 }
 
-# Output the resolved value
-if [ -n "${PROPS[$PROPERTY_NAME]}" ]; then
-	resolve "$PROPERTY_NAME"
+# Recursive resolution of ${get("...")}
+resolve_value() {
+	local val
+	val="$(get_raw_value "$1")"
+	local iterations=0
+	while echo "$val" | grep -q '\${get("'; do
+		inner_key=$(echo "$val" | sed -n 's/.*\${get("\([^"]*\)")}.*/\1/p')
+		inner_val=$(get_raw_value "$inner_key")
+		val=$(echo "$val" | sed "s|\${get(\"$inner_key\")}|$inner_val|g")
+		iterations=$((iterations + 1))
+		[ "$iterations" -gt 10 ] && break
+	done
+	echo "$val"
+}
+
+# Final output
+result=$(resolve_value "$PROPERTY_NAME")
+
+if [ -n "$result" ]; then
+	echo "$result"
 else
 	echo "Property '$PROPERTY_NAME' not found or empty in $FILE"
 	exit 1

@@ -11,13 +11,13 @@ SINGLE_LINE_ARRAY=false
 
 # Parse options
 while getopts "aqsf:" opt; do
-  case "$opt" in
+	case "$opt" in
 	a) AS_ARRAY=true ;;
 	q) QUOTE_ITEMS=true ;;
 	s) SINGLE_LINE_ARRAY=true ;;
 	f) CONFIG_FILE="$OPTARG" ;;
 	*) echo "Usage: $0 [-a] [-s] [-q] [-f <file>] <property_name>"; exit 1 ;;
-  esac
+	esac
 done
 shift $((OPTIND - 1))
 
@@ -47,15 +47,12 @@ fi
 if $AS_ARRAY; then
 	IFS=',' read -r -a array <<< "$PROPERTY_VALUE"
 	if $SINGLE_LINE_ARRAY; then
-		output=""
-		for item in "${array[@]}"; do
-			if $QUOTE_ITEMS; then
-				output+="\"$item\" "
-			else
-				output+="$item "
-			fi
-		done
-		echo "${output::-1}"  # Trim trailing space
+		if $QUOTE_ITEMS; then
+			printf ' "%s"' "${array[@]}"
+		else
+			printf ' %s' "${array[@]}"
+		fi
+		echo	# newline
 	else
 		for item in "${array[@]}"; do
 			if $QUOTE_ITEMS; then
