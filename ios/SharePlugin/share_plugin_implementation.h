@@ -11,7 +11,8 @@
 extern String const DATA_KEY_TITLE;
 extern String const DATA_KEY_SUBJECT;
 extern String const DATA_KEY_CONTENT;
-extern String const DATA_KEY_IMAGE_PATH;
+extern String const DATA_KEY_FILE_PATH;
+extern String const DATA_KEY_MIME_TYPE;
 
 extern String const SIGNAL_NAME_SHARE_COMPLETED;
 
