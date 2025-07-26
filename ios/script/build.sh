@@ -273,20 +273,20 @@ function build_plugin()
 
 
 function merge_string_array() {
-  local arr=("$@")  # Accept array as input
-  local result=""
-  local first=true
+	local arr=("$@")  # Accept array as input
+	local result=""
+	local first=true
 
-  for str in "${arr[@]}"; do
-    if [ "$first" = true ]; then
-      result="$str"
-      first=false
-    else
-      result="$result, $str"
-    fi
-  done
+	for str in "${arr[@]}"; do
+	if [ "$first" = true ]; then
+		result="$str"
+		first=false
+	else
+		result="$result, $str"
+	fi
+	done
 
-  echo "$result"
+	echo "$result"
 }
 
 
@@ -347,7 +347,7 @@ function create_zip_archive()
 				s/@pluginName@/$PLUGIN_NAME/g;
 				s/@pluginVersion@/$PLUGIN_VERSION/g;
 				s/@pluginNodeName@/$PLUGIN_NODE_TYPE/g;
-				s/@pluginPackageName@/$PLUGIN_PACKAGE_NAME/g;
+				s/@pluginPackage@/$PLUGIN_PACKAGE_NAME/g;
 				s/@pluginDependencies@/$ANDROID_DEPENDENCIES/g;
 				s/@iosFrameworks@/$(merge_string_array $IOS_FRAMEWORKS)/g;
 				s/@iosLinkerFlags@/$(merge_string_array $IOS_LINKER_FLAGS)/g
