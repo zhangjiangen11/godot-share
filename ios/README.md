@@ -56,4 +56,4 @@ ___
 
 ## <img src="../addon/icon.png" width="20"> Libraries
 
-Library archives will be created in the `bin/release` directory.
+Library archives will be created in the `build/release` directory.
