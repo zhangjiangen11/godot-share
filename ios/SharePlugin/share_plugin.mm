@@ -10,19 +10,19 @@
 #import "core/config/engine.h"
 
 
-SharePlugin *plugin;
+SharePlugin *share_plugin;
 
 void share_plugin_init() {
-	NSLog(@"init plugin");
-
-	plugin = memnew(SharePlugin);
-	Engine::get_singleton()->add_singleton(Engine::Singleton("SharePlugin", plugin));
+	NSLog(@"SharePlugin: Initializing plugin at timestamp: %f", [[NSDate date] timeIntervalSince1970]);
+	share_plugin = memnew(SharePlugin);
+	Engine::get_singleton()->add_singleton(Engine::Singleton("SharePlugin", share_plugin));
+	NSLog(@"SharePlugin: Singleton registered");
 }
 
 void share_plugin_deinit() {
-	NSLog(@"deinit plugin");
-	
-	if (plugin) {
-		memdelete(plugin);
+	NSLog(@"SharePlugin: Deinitializing plugin");
+	if (share_plugin) {
+		memdelete(share_plugin);
+		share_plugin = nullptr;
 	}
 }
