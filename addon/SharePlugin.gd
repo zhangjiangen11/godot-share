@@ -9,8 +9,9 @@ const PLUGIN_NODE_TYPE_NAME = "@pluginNodeName@"
 const PLUGIN_PARENT_NODE_TYPE = "Node"
 const PLUGIN_NAME: String = "@pluginName@"
 const PLUGIN_PACKAGE: String = "@pluginPackage@"
-const PLUGIN_DEPENDENCIES: Array = [ @pluginDependencies@ ]
+const ANDROID_DEPENDENCIES: Array = [ @androidDependencies@ ]
 const IOS_FRAMEWORKS: Array = [ @iosFrameworks@ ]
+const IOS_EMBEDDED_FRAMEWORKS: Array = [ @iosEmbeddedFrameworks@ ]
 const IOS_LINKER_FLAGS: Array = [ @iosLinkerFlags@ ]
 
 const PROVIDER_TAG = """
@@ -64,7 +65,7 @@ class AndroidExportPlugin extends EditorExportPlugin:
 
 
 	func _get_android_dependencies(platform: EditorExportPlatform, debug: bool) -> PackedStringArray:
-		return PackedStringArray(PLUGIN_DEPENDENCIES)
+		return PackedStringArray(ANDROID_DEPENDENCIES)
 
 
 	func _get_android_manifest_application_element_contents(platform: EditorExportPlatform, debug: bool) -> String:
@@ -88,6 +89,9 @@ class IosExportPlugin extends EditorExportPlugin:
 	func _export_begin(features: PackedStringArray, is_debug: bool, path: String, flags: int) -> void:
 		for __framework in IOS_FRAMEWORKS:
 			add_ios_framework(__framework)
+
+		for __framework in IOS_EMBEDDED_FRAMEWORKS:
+			add_ios_embedded_framework(__framework)
 
 		for __flag in IOS_LINKER_FLAGS:
 			add_ios_linker_flags(__flag)
